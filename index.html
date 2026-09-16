@@ -4,98 +4,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MI Portal - AYCL Field Inspector</title>
+    <title>Field Inspector Portal - AYCL</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .sidebar-hidden { display: none !important; }
         @media (min-width: 768px) { .sidebar-hidden { display: flex !important; } }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        @media (max-width: 768px) { .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; } }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; border: 2px solid #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 
-<body class="min-h-screen h-screen flex flex-col antialiased bg-slate-50 overflow-hidden m-0 p-0">
+<body class="min-h-screen h-screen flex flex-col antialiased bg-slate-50 overflow-hidden m-0 p-0 role-inspector">
 
     <script>
         // 🎯 PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE
-        const API_URL = "https://script.google.com/macros/s/AKfycbzz97XaDNVrvlAkPE8iySoMSMZmsafTSRmW7tbDlrI9SdfoUk0CRvAFbej1UAhxECI6ww/exec";
-        
-        const CLIENTS = {
-            "AYCL": { name: "Andrew Yule and Company Limited", shortName: "AYCL", logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMBVkToRt50US-6-8ZKBQ_ZeaPmA_CfHq9ct_5TSV5SA&s" },
-            "NPCC": { name: "National Projects Construction Corporation Limited", shortName: "NPCC", logo: "https://www.uxdt.nic.in/wp-content/uploads/2020/06/NPCC-Preview.png" }
+        const API_URL = "https://script.google.com/macros/s/AKfycbwSNTlvfAnf1VtRKCrwz6SiV15yz04EqgevxdHxgupPaXMQGBqAxw3iZBeFRt6KXp3v/exec";
+
+        // 🎯 LOCKED TO AYCL ONLY
+        const ACTIVE_CLIENT = { 
+            name: "Andrew Yule and Company Limited", 
+            shortName: "AYCL", 
+            logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMBVkToRt50US-6-8ZKBQ_ZeaPmA_CfHq9ct_5TSV5SA&s" 
         };
 
         let currentMiUser = null;
-        window.CURRENT_CLIENT = "AYCL"; // Default strictly to AYCL
+        let activeModule = "inspectorDashboard";
+        window.CURRENT_CLIENT = "AYCL"; // Hardcoded globally
 
-        // Global Fetch Interceptor to always append client=AYCL
+        // =========================================================================
+        // 🛡️ GLOBAL NETWORK INTERCEPTOR (Forces AYCL onto all requests)
+        // =========================================================================
         const originalFetch = window.fetch;
-        window.fetch = async function(...args) {
+        window.fetch = async function (...args) {
             let resource = args[0];
             let config = args[1] || {};
-            if (typeof resource === 'string' && resource.includes("script.google.com/macros")) {
+            let isApiCall = typeof resource === 'string' && resource.includes("script.google.com/macros");
+
+            if (isApiCall) {
                 if (!config.method || config.method.toUpperCase() === 'GET') {
                     if (resource.includes('?')) {
-                        if (!resource.includes('client=')) resource += `&client=${window.CURRENT_CLIENT}`;
+                        if (!resource.includes('client=')) resource += `&client=AYCL`;
                     } else {
-                        resource += `?client=${window.CURRENT_CLIENT}`;
+                        resource += `?client=AYCL`;
                     }
-                } else if (config.method && config.method.toUpperCase() === 'POST' && config.body) {
+                }
+                else if (config.method && config.method.toUpperCase() === 'POST' && config.body) {
                     try {
                         let bodyObj = JSON.parse(config.body);
-                        if (!bodyObj.client) { bodyObj.client = window.CURRENT_CLIENT; config.body = JSON.stringify(bodyObj); }
-                    } catch(e) {}
+                        if (!bodyObj.client) {
+                            bodyObj.client = "AYCL";
+                            config.body = JSON.stringify(bodyObj);
+                        }
+                    } catch (e) { }
                 }
                 args[0] = resource;
                 args[1] = config;
             }
-            return originalFetch(...args);
+            return await originalFetch(...args);
         };
     </script>
 
+    <!-- Full height screen container -->
     <div id="mi-app-root" class="w-full h-full flex flex-col overflow-hidden"></div>
 
     <script>
+        let isRootInitialized = false;
+
         document.addEventListener("DOMContentLoaded", () => {
+            if (isRootInitialized) return;
+            isRootInitialized = true;
+
+            // Isolated Cache Key for AYCL Inspectors
             const cached = localStorage.getItem("mi_aycl_inspector_cache");
+            
             if (cached) {
                 try {
                     currentMiUser = JSON.parse(cached);
-                    if (currentMiUser.client && currentMiUser.client.toUpperCase() !== "AYCL") {
-                        inspectorLogout();
-                        return;
+                    // Double check lock-in during cache load
+                    if(currentMiUser.role !== 'inspector' || currentMiUser.client !== 'AYCL') {
+                        throw new Error("Invalid session context");
                     }
-                    window.CURRENT_CLIENT = "AYCL";
-                    mountInspectorShell();
-                } catch (e) { inspectorLogout(); }
-            } else { renderInspectorLogin(); }
+                    activeModule = 'inspectorDashboard';
+                    mountMiDashboardShell();
+                } catch (e) {
+                    miLogout();
+                }
+            } else {
+                renderMiLogin();
+            }
         });
 
-        function renderInspectorLogin() {
+        function renderMiLogin() {
             const root = document.getElementById("mi-app-root");
+
             root.innerHTML = `
                 <div class="flex-1 flex items-center justify-center p-4 bg-slate-900 h-full w-full">
                     <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 border border-slate-800">
-                        <div class="text-center mb-6">
-                            <div class="inline-flex p-3 bg-slate-50 rounded-2xl mb-3 shadow-inner border border-slate-100">
-                                <img src="${CLIENTS['AYCL'].logo}" alt="Logo" class="w-12 h-12 object-contain">
+                        <div class="text-center mb-8">
+                            <div class="inline-flex p-3 bg-slate-50 rounded-2xl mb-4 shadow-inner border border-slate-100">
+                                <img src="${ACTIVE_CLIENT.logo}" alt="AYCL Logo" class="w-12 h-12 object-contain mix-blend-multiply">
                             </div>
-                            <h2 class="text-base font-black text-slate-900 tracking-tight">Inspector Field Portal</h2>
-                            <p class="text-[11px] text-slate-500 mt-1 uppercase font-bold tracking-wider">AYCL Operations Workspace</p>
+                            <h2 class="text-xl font-black text-slate-900 tracking-tight">${ACTIVE_CLIENT.shortName} Portal</h2>
+                            <p class="text-[11px] text-emerald-600 mt-1 uppercase font-bold tracking-wider">Field Inspector Access Only</p>
                         </div>
-                        <form onsubmit="handleInspectorLogin(event)" class="space-y-4">
+
+                        <form onsubmit="handleMiLogin(event)" class="space-y-5">
                             <div>
-                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Username</label>
-                                <input type="text" id="insp-user" required class="w-full px-4 py-3 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter username">
+                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1.5 ml-1">Inspector ID</label>
+                                <div class="relative">
+                                    <i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                                    <input type="text" id="mi-user" required class="w-full pl-11 pr-4 py-3.5 border border-slate-300 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all" placeholder="Enter Inspector ID">
+                                </div>
                             </div>
                             <div>
-                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Password</label>
-                                <input type="password" id="insp-pass" required class="w-full px-4 py-3 border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1.5 ml-1">Security Key</label>
+                                <div class="relative">
+                                    <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                                    <input type="password" id="mi-pass" required class="w-full pl-11 pr-12 py-3.5 border border-slate-300 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all" placeholder="••••••••">
+                                    <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer">
+                                        <i id="password-eye-icon" data-lucide="eye" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <button type="submit" id="login-submit-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2">
-                                <span>Inspector Login</span>
+                            <button type="submit" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2">
+                                <span>Authenticate Access</span>
+                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
                             </button>
                         </form>
                     </div>
@@ -104,130 +141,197 @@
             lucide.createIcons();
         }
 
-        async function handleInspectorLogin(e) {
-            e.preventDefault();
-            const u = document.getElementById("insp-user").value.trim();
-            const p = document.getElementById("insp-pass").value.trim();
-
-            const btn = document.getElementById("login-submit-btn");
-            const originalBtnHtml = btn.innerHTML;
-            
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Authenticating...`;
-            btn.disabled = true;
+        function togglePasswordVisibility() {
+            const passInput = document.getElementById("mi-pass");
+            const eyeIcon = document.getElementById("password-eye-icon");
+            if (passInput.type === "password") {
+                passInput.type = "text";
+                eyeIcon.setAttribute("data-lucide", "eye-off");
+            } else {
+                passInput.type = "password";
+                eyeIcon.setAttribute("data-lucide", "eye");
+            }
             lucide.createIcons();
+        }
+
+        async function handleMiLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById("mi-user").value.trim();
+            const p = document.getElementById("mi-pass").value.trim();
+
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto"></i>`;
+            btn.disabled = true;
 
             try {
+                // Send credentials - Network Interceptor will automatically force client=AYCL
                 const res = await originalFetch(`${API_URL}?action=login&username=${encodeURIComponent(u)}&password=${encodeURIComponent(p)}`);
-                const data = await res.json();
+                const textData = await res.text();
+                const data = JSON.parse(textData);
 
-                if (data.status && data.role === 'inspector') {
-                    const assignedClient = (data.client || 'AYCL').toUpperCase();
+                if (data.status) {
+                    let role = (data.role || "Readonly").toLowerCase();
+                    let client = data.client || "AYCL";
 
-                    // 🎯 RESTRICTION: Only allow AYCL inspectors
-                    if (assignedClient !== 'AYCL') {
-                        alert("Access Denied: You are not authorized to log in through this portal.");
-                        btn.innerHTML = originalBtnHtml;
-                        btn.disabled = false;
-                        lucide.createIcons();
+                    // 🚨 STRICT SECURITY GATE: Reject Admins, Coordinators, and NPCC users immediately
+                    if (role !== 'inspector') {
+                        alert("Access Denied: This portal is strictly for Field Inspectors. Admins/Coordinators must use the main portal.");
+                        renderMiLogin();
+                        return;
+                    }
+                    if (client !== 'AYCL') {
+                        alert("Access Denied: You are not registered under the AYCL division.");
+                        renderMiLogin();
                         return;
                     }
 
-                    currentMiUser = { username: u, name: data.name, role: 'inspector', client: 'AYCL', inspectorId: data.inspectorId };
-                    window.CURRENT_CLIENT = "AYCL";
+                    currentMiUser = {
+                        username: u,
+                        name: data.name || "Inspector",
+                        role: 'inspector',
+                        client: 'AYCL',
+                        inspectorId: data.inspectorId || null
+                    };
+
                     localStorage.setItem("mi_aycl_inspector_cache", JSON.stringify(currentMiUser));
-                    mountInspectorShell();
+                    activeModule = 'inspectorDashboard';
+                    mountMiDashboardShell();
                 } else {
-                    alert("Invalid inspector credentials.");
-                    btn.innerHTML = originalBtnHtml;
+                    alert(data.message || "Invalid credentials.");
+                    btn.innerHTML = `<span>Authenticate Access</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>`;
                     btn.disabled = false;
                     lucide.createIcons();
                 }
-            } catch (err) { 
-                alert("Login failed due to network connection."); 
-                btn.innerHTML = originalBtnHtml;
+            } catch (err) {
+                alert("Authentication network request failed.");
+                btn.innerHTML = `<span>Authenticate Access</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>`;
                 btn.disabled = false;
                 lucide.createIcons();
             }
         }
 
-        function inspectorLogout() {
+        function miLogout() {
             currentMiUser = null;
             localStorage.removeItem("mi_aycl_inspector_cache");
-            renderInspectorLogin();
+            isRootInitialized = false;
+            renderMiLogin();
         }
 
-        function mountInspectorShell() {
+        function mountMiDashboardShell() {
             const root = document.getElementById("mi-app-root");
-            const clientObj = CLIENTS["AYCL"];
 
             root.innerHTML = `
                 <div class="flex w-full h-screen overflow-hidden relative">
-                    <aside id="inspector-sidebar" class="sidebar-hidden md:flex absolute md:relative w-64 h-full bg-slate-900 text-white flex-col justify-between border-r border-slate-800 z-50 shadow-2xl">
+                    <aside id="mi-sidebar" class="sidebar-hidden md:flex absolute md:relative w-64 h-full bg-slate-900 text-white flex-col justify-between border-r border-slate-800 z-50 shadow-2xl">
                         <div class="flex-1 overflow-y-auto custom-scrollbar pb-4">
-                            <div class="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+                            <div class="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between sticky top-0 z-20">
                                 <div class="flex items-center gap-3">
-                                    <img src="${clientObj.logo}" alt="Logo" class="w-8 h-8 object-contain bg-white rounded-lg p-0.5">
-                                    <span class="font-black text-[12px] tracking-tight uppercase text-slate-200">${clientObj.shortName} Workspace</span>
+                                    <img src="${ACTIVE_CLIENT.logo}" alt="Logo" class="w-8 h-8 object-contain bg-white rounded-lg p-0.5 shadow-sm">
+                                    <span class="font-black text-[12px] tracking-tight uppercase text-slate-200 truncate w-36">${ACTIVE_CLIENT.shortName} Inspector</span>
                                 </div>
-                                <button onclick="toggleSidebar()" class="md:hidden text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+                                <button onclick="toggleMiSidebar()" class="md:hidden text-slate-400 p-1 hover:bg-slate-800 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
                             </div>
-                            <nav class="mt-3 pr-3 space-y-1">
-                                <button onclick="loadInspectorModule('inspectorDashboard', this)" id="nav-inspectorDashboard" class="insp-nav-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition rounded-r-lg text-left">
-                                    <i data-lucide="briefcase" class="w-4 h-4 text-emerald-400"></i> My Inspections
+
+                            <nav id="mi-dynamic-nav" class="mt-3 pr-3 space-y-1 pb-4">
+                                <div class="px-4 mb-2 mt-2"><span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">My Workspace</span></div>
+                                <button onclick="loadMiModule('inspectorDashboard', this)" id="nav-inspectorDashboard" class="mi-nav-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-white transition rounded-r-lg text-left">
+                                    <i data-lucide="briefcase" class="w-4 h-4 text-emerald-400 shrink-0"></i> My Inspections
                                 </button>
-                                <button onclick="loadInspectorModule('changeCredential', this)" id="nav-changeCredential" class="insp-nav-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800 hover:text-white transition rounded-r-lg text-left">
-                                    <i data-lucide="shield-check" class="w-4 h-4 text-blue-400"></i> Account Settings
+                                <button onclick="loadMiModule('changeCredential', this)" id="nav-changeCredential" class="mi-nav-btn w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-white transition rounded-r-lg text-left">
+                                    <i data-lucide="shield-check" class="w-4 h-4 text-blue-400 shrink-0"></i> Account Settings
                                 </button>
                             </nav>
                         </div>
-                        <div class="p-4 bg-slate-950 border-t border-slate-800">
-                            <div class="text-[10px] text-slate-400 mb-2 truncate">Inspector: <strong class="text-emerald-400">${currentMiUser.name}</strong></div>
-                            <button onclick="inspectorLogout()" class="w-full py-2.5 rounded-xl text-xs font-black text-white bg-rose-600 hover:bg-rose-700 transition flex items-center justify-center gap-2">
-                                <i data-lucide="power" class="w-4 h-4"></i> Logout
+                        
+                        <div class="p-4 bg-slate-950 border-t border-slate-800 shrink-0 space-y-3 hidden md:block">
+                            <div class="bg-slate-900 rounded-xl p-3 border border-slate-800/50">
+                                <div class="flex justify-between items-center mb-1">
+                                    <div class="text-[10px] text-slate-400 font-mono">Role: <strong class="text-emerald-400">Inspector</strong></div>
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">AYCL</span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 font-mono truncate">User: <span class="text-slate-300 font-bold">${currentMiUser.name}</span></div>
+                            </div>
+                            <button onclick="miLogout()" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black text-white bg-rose-600 hover:bg-rose-700 shadow-md transition-all cursor-pointer border border-rose-500">
+                                <i data-lucide="power" class="w-4 h-4"></i>
+                                <span>Logout Session</span>
                             </button>
                         </div>
                     </aside>
+                    
                     <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-                        <div class="bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3 md:hidden">
-                            <button onclick="toggleSidebar()" class="text-slate-800"><i data-lucide="menu" class="w-6 h-6"></i></button>
-                            <span class="font-black text-xs uppercase text-slate-800">${clientObj.shortName} Inspector</span>
+                        <div class="bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3 sticky top-0 z-40 shadow-sm md:hidden shrink-0">
+                            <button onclick="toggleMiSidebar()" class="text-slate-800 p-1 rounded-lg hover:bg-slate-100"><i data-lucide="menu" class="w-6 h-6"></i></button>
+                            <div class="flex items-center gap-2">
+                                <img src="${ACTIVE_CLIENT.logo}" alt="Logo" class="h-6 w-auto max-w-[40px] object-contain">
+                                <span class="font-black text-[11px] uppercase tracking-wider text-slate-800">${ACTIVE_CLIENT.shortName} Portal</span>
+                            </div>
                         </div>
-                        <main id="inspector-viewport" class="flex-1 p-3 sm:p-6 overflow-y-auto custom-scrollbar bg-slate-50"></main>
+                        
+                        <main id="mi-viewport" class="flex-1 p-3 sm:p-6 overflow-y-auto custom-scrollbar bg-slate-50 relative"></main>
+
+                        <button onclick="miLogout()" title="Logout" class="md:hidden fixed bottom-6 right-6 z-[100] flex items-center justify-center w-14 h-14 rounded-full text-white bg-rose-600 hover:bg-rose-700 shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:-translate-y-1 transition-all cursor-pointer border-2 border-white">
+                            <i data-lucide="power" class="w-6 h-6"></i>
+                        </button>
                     </div>
                 </div>
             `;
-            window.toggleSidebar = () => document.getElementById('inspector-sidebar').classList.toggle('sidebar-hidden');
-            loadInspectorModule('inspectorDashboard');
+            window.toggleMiSidebar = () => { document.getElementById('mi-sidebar').classList.toggle('sidebar-hidden'); };
+            loadMiModule(activeModule);
         }
 
-        async function loadInspectorModule(moduleName, btnElem) {
-            if (btnElem) {
-                document.querySelectorAll(".insp-nav-btn").forEach(b => b.classList.remove("bg-slate-800", "text-white"));
-                btnElem.classList.add("bg-slate-800", "text-white");
-            } else {
-                const defBtn = document.getElementById(`nav-${moduleName}`);
-                if(defBtn) defBtn.classList.add("bg-slate-800", "text-white");
+        async function loadMiModule(moduleName, btnElement) {
+            activeModule = moduleName;
+
+            if (window.innerWidth < 768) {
+                const sidebar = document.getElementById('mi-sidebar');
+                if (sidebar && !sidebar.classList.contains('sidebar-hidden')) {
+                    sidebar.classList.add('sidebar-hidden');
+                }
             }
 
-            const view = document.getElementById("inspector-viewport");
-            view.innerHTML = `<div class="p-8 text-center text-xs text-slate-400 animate-pulse">Loading workspace module...</div>`;
+            // Update Active Menu State
+            document.querySelectorAll(".mi-nav-btn").forEach(b => b.classList.remove("bg-slate-800", "text-slate-200"));
+            if (btnElement) {
+                btnElement.classList.add("bg-slate-800", "text-slate-200");
+            } else {
+                const activeBtn = document.getElementById(`nav-${moduleName}`);
+                if (activeBtn) activeBtn.classList.add("bg-slate-800", "text-slate-200");
+            }
+
+            const view = document.getElementById("mi-viewport");
+            const fileUrl = `${moduleName}.html`;
+
+            // 🚨 STRICT ROUTE PROTECTION: Only allow these two files to be fetched
+            if (moduleName !== 'inspectorDashboard' && moduleName !== 'changeCredential') {
+                view.innerHTML = `<div class="p-12 text-center space-y-3 bg-white rounded-3xl border shadow-sm"><i data-lucide="shield-alert" class="w-12 h-12 text-rose-500 mx-auto"></i><h3 class="font-black text-slate-800 uppercase text-sm">Access Restricted</h3><p class="text-xs text-slate-500">Inspectors cannot access this module.</p></div>`;
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
+            view.innerHTML = `<div class="flex items-center justify-center h-40"><div class="flex flex-col items-center gap-3"><i data-lucide="loader-2" class="w-6 h-6 text-slate-400 animate-spin"></i><span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading Workspace...</span></div></div>`;
+            if (window.lucide) lucide.createIcons();
 
             try {
-                const fileUrl = `${moduleName}.html?v=` + new Date().getTime();
-                const res = await originalFetch(fileUrl);
+                const cacheBusterUrl = fileUrl + "?v=" + new Date().getTime();
+                const res = await originalFetch(cacheBusterUrl);
                 const html = await res.text();
                 view.innerHTML = html;
 
+                // Execute embedded scripts
                 const scripts = view.getElementsByTagName("script");
                 for (let s of scripts) {
-                    const sc = document.createElement("script");
-                    sc.text = `(function() { try { ${s.textContent} } catch(e) { console.warn(e); } })();`;
-                    document.head.appendChild(sc);
-                    document.head.removeChild(sc);
+                    try {
+                        const safeCode = `(function() { try { ${s.textContent} } catch(err) { console.warn("Script execution notice:", err); } })();`;
+                        const sc = document.createElement("script");
+                        sc.text = safeCode;
+                        document.head.appendChild(sc);
+                        document.head.removeChild(sc);
+                    } catch (scriptErr) { console.error("Error executing module script:", scriptErr); }
                 }
+
                 if (window.lucide) lucide.createIcons();
             } catch (err) {
-                view.innerHTML = `<p class="text-rose-600 text-xs font-bold p-4">Failed to load view.</p>`;
+                view.innerHTML = `<div class="p-6 text-red-600 text-xs font-bold text-center">Failed to connect to module: ${fileUrl}</div>`;
             }
         }
     </script>
