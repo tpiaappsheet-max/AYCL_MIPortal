@@ -99,7 +99,6 @@
                                 <option value="Hold by Manufacturer">Hold by Manufacturer</option>
                                 <option value="Hold by TKC">Hold by TKC</option>
                                 <option value="NABL Awaited">NABL Awaited</option>
-                                <option value="Pending">Pending</option>
                             </select>
                         </div>
                     </div>
@@ -538,7 +537,7 @@
     }
 
     // ==========================================
-    // SAVE LOGIC TO BACKEND
+    // SAVE LOGIC TO BACKEND (UPDATED)
     // ==========================================
     window.handleInspSave = async function() {
         const btn = document.getElementById("btn-final-save");
@@ -559,22 +558,20 @@
                 discom: discomValue
             };
 
-            // Create universal Date/Time strings for frontend log creation
             const now = new Date();
             const pad = (n) => n.toString().padStart(2, '0');
             const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
             const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
+            let exactLogString = "";
+
             if (type === 'not-scheduled' || type === 'scheduled-reschedule') {
                 payload.scheduleDate = document.getElementById("input-schedule-date").value;
                 payload.status = "Schedule";
-                
-                // Set Schedule log in frontend
-                payload.logDetails = `**SCHEDULE UPDATED** - Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}`;
-                payload.logdetails = payload.logDetails; // Send lowercase too just in case
-
+                exactLogString = `**SCHEDULE UPDATED** - Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}`;
+                payload.logDetails = exactLogString; 
+                payload.logdetails = exactLogString; 
             } else {
-                // FETCH GPS FOR INSPECTION COMPLETION
                 let coords;
                 try {
                     btn.innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 animate-pulse"></i> Fetching Location...`;
@@ -589,10 +586,9 @@
                 
                 const locationString = `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
                 
-                // Set Completion log with GPS in frontend
-                const exactLogString = `**INSPECTION COMPLETION UPDATED** - Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}, Location - ${locationString}`;
+                exactLogString = `**INSPECTION COMPLETION UPDATED** - Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}, Location - ${locationString}`;
                 payload.logDetails = exactLogString;
-                payload.logdetails = exactLogString; // Send lowercase too just in case
+                payload.logdetails = exactLogString; 
                 payload.gpsLocation = locationString;
 
                 payload.inspectionCompletedOn = document.getElementById("input-comp-date").value;
@@ -604,29 +600,37 @@
                 const inspectionDates = document.getElementById("input-dates-insp").value;
                 
                 if (isPVVNL) {
-                    // FIX: Save Dates in AC (dateFrom) and Mandays in AD (dateTo)
                     payload.dateFrom = inspectionDates; 
                     payload.dateTo = payload.manDays; 
-                    payload.manDays = ""; // Clear manDays so it doesn't populate column AE
-                    
+                    payload.manDays = ""; 
                     payload.sealType = "";
                     payload.sealSerial = "";
                     payload.sealNoCount = "";
                 } else {
-                    // Unchanged for other Discoms
                     payload.dateFrom = inspectionDates;
                     payload.sealType = document.getElementById("input-seal-type").value;
                     payload.sealSerial = document.getElementById("input-seal-serial").value;
                     payload.sealNoCount = document.getElementById("input-seal-count").value;
                 }
-
                 payload.conductedBy = currentMiUser.name; 
             }
 
             btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...`;
 
-            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
-            const data = await res.json();
+            // 🎯 SEND TO BOTH ENDPOINTS IN PARALLEL
+            const logPayload = {
+                action: "saveLogDetails",
+                client: currentMiUser.client,
+                inspectionId: payload.inspectionId,
+                logDetails: exactLogString
+            };
+
+            const [resUpdate, resLog] = await Promise.all([
+                fetch(API_URL, { method: "POST", body: JSON.stringify(payload) }),
+                fetch(API_URL, { method: "POST", body: JSON.stringify(logPayload) })
+            ]);
+
+            const data = await resUpdate.json();
 
             if (data.status) {
                 window.closeInspModal();
@@ -643,6 +647,7 @@
             if(window.lucide) window.lucide.createIcons();
         }
     }
+    
     // ==========================================
     // HELPER LOGIC (Date sequences & Seals)
     // ==========================================
