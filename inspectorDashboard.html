@@ -537,7 +537,7 @@
         document.getElementById("modal-entry-state").classList.add("hidden");
         document.getElementById("modal-confirm-state").classList.remove("hidden");
     }
-    
+
     
     window.hideConfirmationState = function() {
         document.getElementById("modal-confirm-state").classList.add("hidden");
@@ -561,7 +561,7 @@
         });
     }
 
-    // ==========================================
+   // ==========================================
     // SAVE LOGIC TO BACKEND (UPDATED)
     // ==========================================
     window.handleInspSave = async function() {
@@ -591,9 +591,20 @@
             let exactLogString = "";
 
             if (type === 'not-scheduled' || type === 'scheduled-reschedule') {
-                payload.scheduleDate = document.getElementById("input-schedule-date").value;
+                const rawScheduleDate = document.getElementById("input-schedule-date").value;
+                payload.scheduleDate = rawScheduleDate;
                 payload.status = "Schedule";
-                exactLogString = `**SCHEDULE UPDATED** - Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}`;
+                
+                // Convert schedule date to Indian format (DD/MM/YYYY) for log string
+                let formattedSchedDate = rawScheduleDate;
+                if (rawScheduleDate && rawScheduleDate.includes('-')) {
+                    const p = rawScheduleDate.split('-');
+                    if (p.length === 3) {
+                        formattedSchedDate = `${p[2]}/${p[1]}/${p[0]}`;
+                    }
+                }
+                
+                exactLogString = `**SCHEDULE UPDATED** Sched Date: ${formattedSchedDate}, Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}`;
                 payload.logDetails = exactLogString; 
                 payload.logdetails = exactLogString; 
             } else {
@@ -610,8 +621,9 @@
                 }
                 
                 const locationString = `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
-                
-                exactLogString = `**INSPECTION COMPLETION UPDATED** - Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}, Location - ${locationString}`;
+                const inspectionDates = document.getElementById("input-dates-insp").value;
+
+                exactLogString = `**INSPECTION COMPLETION UPDATED** Testing Date(s)- ${inspectionDates}, Insp- ${currentMiUser.name}, ${dateStr} , ${timeStr}, Location - ${locationString}`;
                 payload.logDetails = exactLogString;
                 payload.logdetails = exactLogString; 
                 payload.gpsLocation = locationString;
@@ -621,8 +633,6 @@
                 payload.reportOm = document.getElementById("input-om").value;
                 payload.status = document.getElementById("input-status").value;
                 payload.subStatus = document.getElementById("input-sub-status").value;
-                
-                const inspectionDates = document.getElementById("input-dates-insp").value;
                 
                 if (isPVVNL) {
                     payload.dateFrom = inspectionDates; 
