@@ -80,7 +80,6 @@
                             <select id="input-status" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
                                 <option value="" disabled selected>-- Select Status --</option>
                                 <option value="Completed">Completed</option>
-                                <option value="Schedule">Schedule</option>
                                 <option value="Revised">Revised</option>
                                 <option value="Cancelled">Cancelled</option>
                                 <option value="On Hold">On Hold</option>
@@ -112,7 +111,7 @@
                     <div class="bg-emerald-50/50 p-3 sm:p-4 rounded-2xl border border-emerald-100 space-y-3">
                         <div class="flex flex-col sm:flex-row justify-between sm:items-end gap-3">
                             <div class="flex-1 w-full">
-                                <label class="block text-[10px] font-black uppercase text-emerald-800 mb-1">Date(s) of Inspection (From - To)</label>
+                                <label class="block text-[10px] font-black uppercase text-emerald-800 mb-1">Date(s) of Inspection (From - To) <span class="text-rose-500">*</span></label>
                                 <input type="text" id="input-dates-insp" readonly class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold bg-white outline-none" placeholder="Build sequence below...">
                             </div>
                             <div class="w-full sm:w-24 shrink-0">
@@ -130,12 +129,13 @@
 
                     <!-- Seal Details -->
                     <div id="modal-seal-section" class="bg-amber-50/50 p-3 sm:p-4 rounded-2xl border border-amber-100 space-y-3">
-                        <label class="block text-[10px] font-black uppercase text-amber-800 mb-1">Type of Seal</label>
+                        <label class="block text-[10px] font-black uppercase text-amber-800 mb-1">Type of Seal <span class="text-rose-500">*</span></label>
                         <select id="input-seal-type" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
                             <option value="">-- Select Seal Type --</option>
                             <option value="Polycarbonate Seal">Polycarbonate Seal</option>
                             <option value="Holographic Seal">Holographic Seal</option>
                             <option value="HS Cable Seal">HS Cable Seal</option>
+                            <option value="Not Required">Not Required</option>
                         </select>
 
                         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
@@ -487,24 +487,48 @@
             const omText = document.getElementById("input-om").value.trim();
             const statusVal = document.getElementById("input-status").value;
             const subStatusVal = document.getElementById("input-sub-status").value;
+            const inspDates = document.getElementById("input-dates-insp").value.trim();
+            const sealTypeVal = document.getElementById("input-seal-type").value;
+            const sealSerialVal = document.getElementById("input-seal-serial").value.trim();
 
             if (!compDate) { alert("Please enter the Inspection Completed On date."); return; }
-            if (!omText) { alert("Please enter the Report / OM No and Date."); return; }
+            
+            if (!omText) { 
+                alert("Please enter the Report / OM No and Date."); 
+                document.getElementById("input-om").focus();
+                return; 
+            }
+
             if (!statusVal) { alert("Please select an Inspection Status."); return; }
             if (!subStatusVal) { alert("Please select an Inspection Sub Status."); return; }
 
+            if (!inspDates) {
+                alert("Please provide the Date(s) of Inspection (From - To).");
+                return;
+            }
+
             const isPVVNL = document.getElementById("modal-discom").value.toUpperCase() === 'PVVNL';
 
+            if (!isPVVNL && !sealTypeVal) {
+                alert("Please select a Type of Seal."); 
+                return; 
+            }
+
+            // 🎯 Reordered sequence matching form layout
             summary = `
                 <div class="flex justify-between items-center border-b border-slate-200 pb-2 mb-2"><span class="text-slate-500">Action:</span><span class="font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded">Mark as Completed</span></div>
                 <div class="space-y-1.5">
-                    <div class="flex justify-between"><span class="text-slate-500">Completed On:</span><strong class="text-slate-800">${compDate}</strong></div>
                     <div class="flex justify-between"><span class="text-slate-500">Status:</span><strong class="text-slate-800">${statusVal}</strong></div>
                     <div class="flex justify-between"><span class="text-slate-500">Sub Status:</span><strong class="text-slate-800">${subStatusVal}</strong></div>
-                    <div class="flex justify-between"><span class="text-slate-500">${isPVVNL ? 'Corrected Man days (Claimed)' : 'Man Days'}:</span><strong class="text-slate-800">${document.getElementById("input-mandays").value}</strong></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Completed On:</span><strong class="text-slate-800">${compDate}</strong></div>
                     <div class="flex justify-between"><span class="text-slate-500">Report/OM:</span><strong class="text-slate-800">${omText}</strong></div>
-                    <div class="flex justify-between"><span class="text-slate-500">${isPVVNL ? 'Calculated Mandays Dates' : 'Insp Dates'}:</span><strong class="text-slate-800">${document.getElementById("input-dates-insp").value || '-'}</strong></div>
-                    ${!isPVVNL ? `<div class="flex justify-between"><span class="text-slate-500">Seal Count:</span><strong class="text-slate-800">${document.getElementById("input-seal-count").value || '0'}</strong></div>` : ''}
+                    <div class="flex justify-between"><span class="text-slate-500">${isPVVNL ? 'Calculated Mandays Dates' : 'Insp Dates'}:</span><strong class="text-slate-800">${inspDates || '-'}</strong></div>
+                    <div class="flex justify-between"><span class="text-slate-500">${isPVVNL ? 'Corrected Man days (Claimed)' : 'Man Days'}:</span><strong class="text-slate-800">${document.getElementById("input-mandays").value}</strong></div>
+                    ${!isPVVNL ? `
+                        <div class="flex justify-between"><span class="text-slate-500">Type of Seal:</span><strong class="text-slate-800">${sealTypeVal || '-'}</strong></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Seal Serial No:</span><strong class="text-slate-800 whitespace-pre-wrap text-right max-w-[60%]">${sealSerialVal || '-'}</strong></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Seal Count:</span><strong class="text-slate-800">${document.getElementById("input-seal-count").value || '0'}</strong></div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -513,7 +537,8 @@
         document.getElementById("modal-entry-state").classList.add("hidden");
         document.getElementById("modal-confirm-state").classList.remove("hidden");
     }
-
+    
+    
     window.hideConfirmationState = function() {
         document.getElementById("modal-confirm-state").classList.add("hidden");
         document.getElementById("modal-entry-state").classList.remove("hidden");
