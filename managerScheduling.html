@@ -1,0 +1,610 @@
+<div class="max-w-7xl mx-auto space-y-4 animate-fade-in pb-16">
+
+    <!-- Top Header & Mobile Optimization Badge -->
+    <div class="bg-white p-4 sm:p-6 rounded-3xl border shadow-sm space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+                <h3 class="font-black text-sm uppercase text-slate-900 flex items-center gap-2">
+                    <i data-lucide="smartphone" class="text-blue-600 w-5 h-5"></i> AYCL Manager Portal (AyclHard76)
+                </h3>
+                <p class="text-xs text-slate-500 mt-0.5">Optimized mobile field command center for inspection appointment & scheduling.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="mgr-record-count" class="text-[11px] font-mono px-3 py-1 rounded-xl bg-slate-100 text-slate-700 font-bold border">
+                    Loading records...
+                </span>
+            </div>
+        </div>
+
+        <!-- Summary Count Badges (Clickable to Filter) -->
+        <div class="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+            <div onclick="window.setMgrStatusFilter('scheduled')" class="bg-white p-2.5 rounded-xl border border-slate-200 text-center cursor-pointer hover:border-amber-400 hover:shadow-xs transition">
+                <span class="text-[8px] font-black uppercase text-amber-600 block tracking-wider">Scheduled</span>
+                <p id="mgr-sum-scheduled" class="text-base font-black text-amber-700 mt-0.5">0</p>
+            </div>
+            <div onclick="window.setMgrStatusFilter('pending')" class="bg-white p-2.5 rounded-xl border border-slate-200 text-center cursor-pointer hover:border-blue-400 hover:shadow-xs transition">
+                <span class="text-[8px] font-black uppercase text-blue-600 block tracking-wider">Pending</span>
+                <p id="mgr-sum-pending" class="text-base font-black text-blue-700 mt-0.5">0</p>
+            </div>
+            <div onclick="window.setMgrStatusFilter('unassigned')" class="bg-white p-2.5 rounded-xl border border-slate-200 text-center cursor-pointer hover:border-rose-400 hover:shadow-xs transition">
+                <span class="text-[8px] font-black uppercase text-rose-600 block tracking-wider">Unassigned</span>
+                <p id="mgr-sum-unassigned" class="text-base font-black text-rose-700 mt-0.5">0</p>
+            </div>
+        </div>
+
+        <!-- Mobile Filter Bar (DISCOM, Inspector, Status, Inspection ID) -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1">
+            <div>
+                <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Filter by DISCOM</label>
+                <select id="mgr-filter-discom" onchange="window.renderMgrPortalTable()" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
+                    <option value="ALL">-- All DISCOMs --</option>
+                    <option value="NBPDCL">NBPDCL</option>
+                    <option value="SBPDCL">SBPDCL</option>
+                    <option value="PVVNL">PVVNL</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Filter by Inspector (Col T)</label>
+                <select id="mgr-filter-inspector" onchange="window.renderMgrPortalTable()" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
+                    <option value="ALL">-- All Inspectors --</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Filter by Status Category</label>
+                <select id="mgr-filter-status" onchange="window.renderMgrPortalTable()" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
+                    <option value="ALL">-- All (Schedule, Pending, Blank) --</option>
+                    <option value="scheduled">Scheduled Only</option>
+                    <option value="pending">Pending Only</option>
+                    <option value="unassigned">Unassigned Only</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[9px] font-black uppercase text-slate-400 mb-1">Search Inspection ID</label>
+                <input type="text" id="mgr-search-id" oninput="window.renderMgrPortalTable()" placeholder="e.g. N123D..." class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white uppercase">
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile-First Collapsible Inspection List Container -->
+    <div class="space-y-3" id="mgr-inspection-list-container">
+        <div class="p-8 text-center bg-white rounded-3xl border text-slate-400 font-bold text-xs animate-pulse">
+            Synchronizing manager workspace...
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 1. FULL DETAILS MODAL (Click Inspection ID) -->
+<!-- ========================================== -->
+<div id="mgr-details-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl p-5 sm:p-8 relative border space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between border-b pb-3 sticky top-0 bg-white z-10">
+            <h3 class="font-black text-sm uppercase text-slate-900 flex items-center gap-2">
+                <i data-lucide="file-search" class="text-blue-600 w-5 h-5"></i> Complete Inspection Profile (All Columns)
+            </h3>
+            <button onclick="window.closeMgrDetailsModal()" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div id="mgr-details-body" class="text-xs space-y-4">
+            <!-- Injected dynamically with all sheet columns -->
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 2. ACTION MODAL (Appoint / Schedule & Audit Log) -->
+<!-- ========================================== -->
+<div id="mgr-action-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[110] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-5 sm:p-6 relative border space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between border-b pb-3 sticky top-0 bg-white z-10">
+            <div>
+                <h3 class="font-black text-sm uppercase text-blue-700 flex items-center gap-2">
+                    <i data-lucide="user-cog" class="w-5 h-5"></i> Appointment & Schedule Control
+                </h3>
+                <p id="mgr-modal-subid" class="text-[10px] font-mono text-slate-400 mt-0.5">ID: N/A</p>
+            </div>
+            <button onclick="window.closeMgrActionModal()" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Last Updated Details Banner -->
+        <div class="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl space-y-1.5 text-xs">
+            <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Last Recorded Details (Current State):</span>
+            <div class="flex justify-between"><span class="text-slate-500">Assigned Inspector (Col T):</span> <strong id="mgr-last-insp" class="text-blue-700">-</strong></div>
+            <div class="flex justify-between"><span class="text-slate-500">Schedule Date:</span> <strong id="mgr-last-sched" class="text-slate-800 font-mono">-</strong></div>
+        </div>
+
+        <!-- Form Fields -->
+        <div class="space-y-3.5">
+            <input type="hidden" id="mgr-target-insp-id">
+            <input type="hidden" id="mgr-target-discom">
+
+            <div>
+                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Appoint / Reappoint Inspector (Column T)</label>
+                <select id="mgr-input-inspector" class="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
+                    <option value="">-- Select Inspector --</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Schedule / Reschedule Date</label>
+                <input type="date" id="mgr-input-schedule-date" class="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold outline-none bg-white cursor-pointer">
+                <p class="text-[10px] text-slate-400 mt-1">Selecting a schedule date automatically updates status to 'Schedule'.</p>
+            </div>
+        </div>
+
+        <div class="pt-3 border-t flex justify-end gap-2">
+            <button onclick="window.closeMgrActionModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer">Cancel</button>
+            <button onclick="window.promptMgrConfirmation()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-md cursor-pointer">Review & Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 3. CONFIRMATION MODAL BEFORE SAVING -->
+<!-- ========================================== -->
+<div id="mgr-confirm-modal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[120] flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 border border-slate-200 space-y-4 animate-fade-in">
+        <div class="text-center space-y-2">
+            <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            </div>
+            <h4 class="font-black text-sm uppercase text-slate-900">Confirm Changes?</h4>
+            <p class="text-xs text-slate-500">You are about to update inspector appointment and schedule details. This will be permanently logged in the audit trail.</p>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-2xl border text-xs space-y-1.5" id="mgr-confirm-summary">
+            <!-- Summary injected -->
+        </div>
+
+        <div class="flex gap-2 pt-2 border-t">
+            <button onclick="window.closeMgrConfirmModal()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer">Back</button>
+            <button onclick="window.executeMgrSave()" id="mgr-final-save-btn" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5">
+                <i data-lucide="check" class="w-4 h-4"></i> Yes, Save
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- TOAST NOTIFICATION CONTAINER -->
+<!-- ========================================== -->
+<div id="mgr-toast" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-[200] bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2.5 transition-all animate-fade-in">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="mgr-toast-text">Data successfully updated and synced!</span>
+</div>
+
+<script>
+    window.mgrRawData = [];
+    window.mgrInspectorsList = [];
+
+    window.showMgrToast = function(message) {
+        const toast = document.getElementById("mgr-toast");
+        const txt = document.getElementById("mgr-toast-text");
+        if(toast && txt) {
+            txt.innerText = message || "Data successfully updated and synced!";
+            toast.classList.remove("hidden");
+            setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 3500);
+        }
+    };
+
+    window.initAyclManagerModule = async function() {
+        if (!currentMiUser || currentMiUser.inspectorId !== "AyclHard76") {
+            const viewport = document.getElementById("mi-viewport");
+            if (viewport) {
+                viewport.innerHTML = `
+                    <div class="p-12 text-center space-y-3 bg-white rounded-3xl border shadow-sm">
+                        <i data-lucide="shield-alert" class="w-12 h-12 text-rose-500 mx-auto"></i>
+                        <h3 class="font-black text-slate-800 uppercase text-sm">Access Restricted</h3>
+                        <p class="text-xs text-slate-500">This manager portal is restricted to AYCL Manager (AyclHard76).</p>
+                    </div>
+                `;
+            }
+            if (window.lucide) window.lucide.createIcons();
+            return;
+        }
+
+        try {
+            // 🎯 Utilizing backend handleGetCombinedInspections action
+            const res = await fetch(`${API_URL}?action=getCombinedInspections&client=AYCL`);
+            const textData = await res.text();
+            let parsed;
+            try {
+                parsed = JSON.parse(textData);
+            } catch (err) {
+                throw new Error("Invalid server response format.");
+            }
+
+            if (parsed.status && parsed.data) {
+                window.mgrRawData = parsed.data;
+                window.mgrInspectorsList = parsed.inspectors || [];
+                window.populateMgrInspectorDropdown();
+                window.renderMgrPortalTable();
+            } else {
+                document.getElementById("mgr-record-count").innerText = "Data Unavailable";
+            }
+        } catch (e) {
+            console.error("Manager Portal sync error:", e);
+            document.getElementById("mgr-record-count").innerText = "Network Error";
+        }
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    window.populateMgrInspectorDropdown = function() {
+        const select = document.getElementById("mgr-input-inspector");
+        const filterSelect = document.getElementById("mgr-filter-inspector");
+        if (!select || !filterSelect) return;
+
+        let namesSet = new Set();
+        window.mgrRawData.forEach(r => {
+            const insp = String(r.tpiaInspector || "").trim();
+            if (insp && insp !== "-" && insp.toLowerCase() !== "not appointed") namesSet.add(insp);
+        });
+        window.mgrInspectorsList.forEach(i => {
+            const name = String(i.name || i.InspectorName || "").trim();
+            if (name) namesSet.add(name);
+        });
+
+        let dropdownHtml = `<option value="">-- Not Appointed --</option>`;
+        let filterHtml = `<option value="ALL">-- All Inspectors (${namesSet.size}) --</option>`;
+
+        Array.from(namesSet).sort().forEach(name => {
+            dropdownHtml += `<option value="${name}">${name}</option>`;
+            filterHtml += `<option value="${name}">${name}</option>`;
+        });
+
+        select.innerHTML = dropdownHtml;
+        filterSelect.innerHTML = filterHtml;
+    };
+
+    window.setMgrStatusFilter = function(statusKey) {
+        const statusSelect = document.getElementById("mgr-filter-status");
+        if (statusSelect) {
+            statusSelect.value = statusKey;
+            window.renderMgrPortalTable();
+        }
+    };
+
+    window.renderMgrPortalTable = function() {
+        const discomFilter = document.getElementById("mgr-filter-discom").value;
+        const inspectorFilter = document.getElementById("mgr-filter-inspector").value;
+        const statusCategoryFilter = document.getElementById("mgr-filter-status").value;
+        const searchId = document.getElementById("mgr-search-id").value.trim().toUpperCase();
+        const container = document.getElementById("mgr-inspection-list-container");
+        const countBadge = document.getElementById("mgr-record-count");
+
+        if (!container) return;
+
+        let countSched = 0;
+        let countPending = 0;
+        let countUnassigned = 0;
+
+        window.mgrRawData.forEach(r => {
+            const stat = String(r.status || "").trim().toLowerCase();
+            const hasScheduleDate = r.scheduleDate && String(r.scheduleDate).trim() !== "" && String(r.scheduleDate) !== "-";
+            const isTargetStatus = stat === "schedule" || stat === "scheduled" || stat === "pending" || stat === "";
+            if (!isTargetStatus) return;
+
+            const assignedInsp = String(r.tpiaInspector || "").trim();
+            const isUnassigned = !assignedInsp || assignedInsp === "-" || assignedInsp.toLowerCase() === "not appointed";
+
+            if (isUnassigned) countUnassigned++;
+            else if (stat === "schedule" || stat === "scheduled" || hasScheduleDate) countSched++;
+            else countPending++;
+        });
+
+        document.getElementById("mgr-sum-scheduled").innerText = countSched;
+        document.getElementById("mgr-sum-pending").innerText = countPending;
+        document.getElementById("mgr-sum-unassigned").innerText = countUnassigned;
+
+        let filtered = window.mgrRawData.filter(r => {
+            const stat = String(r.status || "").trim().toLowerCase();
+            const hasScheduleDate = r.scheduleDate && String(r.scheduleDate).trim() !== "" && String(r.scheduleDate) !== "-";
+            const isTargetStatus = stat === "schedule" || stat === "scheduled" || stat === "pending" || stat === "";
+            if (!isTargetStatus) return false;
+
+            const assignedInsp = String(r.tpiaInspector || "").trim();
+            const isUnassigned = !assignedInsp || assignedInsp === "-" || assignedInsp.toLowerCase() === "not appointed";
+
+            if (statusCategoryFilter === "scheduled" && (!(stat === "schedule" || stat === "scheduled") || !hasScheduleDate)) return false;
+            if (statusCategoryFilter === "pending" && (stat !== "pending" && stat !== "")) return false;
+            if (statusCategoryFilter === "unassigned" && !isUnassigned) return false;
+
+            if (discomFilter !== "ALL" && String(r.discom || "").trim().toUpperCase() !== discomFilter) return false;
+            if (inspectorFilter !== "ALL" && assignedInsp !== inspectorFilter) return false;
+            if (searchId && !String(r.inspectionId || "").toUpperCase().includes(searchId)) return false;
+
+            return true;
+        });
+
+        if (countBadge) countBadge.innerText = `${filtered.length} Active Records`;
+
+        if (filtered.length === 0) {
+            container.innerHTML = `
+                <div class="bg-white p-12 rounded-3xl border text-center text-slate-400 font-bold text-xs">
+                    No inspection records match your filter criteria.
+                </div>
+            `;
+            return;
+        }
+
+        let html = "";
+        filtered.forEach(rec => {
+            const idStr = rec.inspectionId || "Unknown";
+            const discomStr = rec.discom || "DISCOM";
+            const assignedInsp = String(rec.tpiaInspector || "").trim();
+            const isAssigned = assignedInsp && assignedInsp !== "-" && assignedInsp.toLowerCase() !== "not appointed";
+            const schedDate = rec.scheduleDate || "NA";
+
+            const encodedPayload = encodeURIComponent(JSON.stringify(rec));
+
+            html += `
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-blue-300 transition">
+                    <div class="flex items-center gap-3">
+                        <span class="px-2.5 py-1 rounded-lg font-black text-xs uppercase bg-purple-50 text-purple-700 border border-purple-200">${discomStr}</span>
+                        <div>
+                            <span onclick="window.openMgrDetailsModal('${encodedPayload}')" class="font-mono font-black text-blue-700 text-sm hover:underline cursor-pointer" title="Click to view all details">${idStr}</span>
+                            <div class="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                                <span>Insp: <strong class="${isAssigned ? 'text-slate-800 font-bold' : 'text-rose-500 italic'}">${isAssigned ? assignedInsp : 'NA'}</strong></span>
+                                <span>•</span>
+                                <span>Sched: <strong class="text-slate-800 font-mono">${schedDate}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <button onclick="window.openMgrActionModal('${encodedPayload}')" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                            <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Appoint / Schedule
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    // 🎯 Displays ALL sheet column details with "NA" fallbacks, excluding Log Details
+    window.openMgrDetailsModal = function(encodedPayload) {
+        if (!encodedPayload) return;
+        const r = JSON.parse(decodeURIComponent(encodedPayload));
+        const modal = document.getElementById("mgr-details-modal");
+        const body = document.getElementById("mgr-details-body");
+
+        const getVal = (v) => (v !== undefined && v !== null && String(v).trim() !== "" && String(v) !== "-") ? String(v) : "NA";
+
+        body.innerHTML = `
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Inspection ID</strong><span class="text-sm font-black text-blue-700 font-mono">${getVal(r.inspectionId)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">DISCOM</strong><span class="text-xs font-bold text-slate-800">${getVal(r.discom)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Scheme</strong><span class="text-xs font-bold text-slate-800">${getVal(r.scheme)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">District</strong><span class="text-xs font-bold text-slate-800">${getVal(r.district)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">PQCC Name</strong><span class="text-xs font-bold text-slate-800">${getVal(r.pqccName)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">TKC</strong><span class="text-xs font-bold text-blue-700">${getVal(r.tkc)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Letter No & Date</strong><span class="text-xs font-bold text-slate-800">${getVal(r.letterNo)} <span class="text-slate-500 font-normal">(${getVal(r.letterDate)})</span></span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Received Date</strong><span class="text-xs font-bold text-slate-800 font-mono">${getVal(r.receivedDate)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Officials</strong><span class="text-xs font-bold text-slate-800">${getVal(r.officials)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Nodal CE</strong><span class="text-xs font-bold text-slate-800">${getVal(r.nodalCe)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Authorization Letter No</strong><span class="text-xs font-bold text-slate-800">${getVal(r.authLetterNo)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Manufacturer & Address</strong><span class="text-xs font-bold text-slate-800">${getVal(r.manufacturer)}<br><span class="text-[10px] text-slate-500 font-normal">${getVal(r.address)}</span></span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Contact Person & Mobile</strong><span class="text-xs font-bold text-slate-800">${getVal(r.contactPerson)} <span class="text-slate-500 font-normal block mt-0.5">${getVal(r.mobile)}</span></span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Material Inspected</strong><span class="text-xs font-bold text-purple-700">${getVal(r.materialInspected)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Quantity</strong><span class="text-xs font-mono font-bold text-slate-800">${getVal(r.quantity)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Assigned Inspector (Col T)</strong><span class="text-xs font-bold text-blue-700">${getVal(r.tpiaInspector)} (${getVal(r.tpiaContact)})</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Material Specification</strong><span class="text-[11px] font-medium text-slate-800 whitespace-pre-wrap break-words">${getVal(r.materialSpec)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Remarks</strong><span class="text-[11px] font-medium text-slate-700 whitespace-pre-wrap break-words">${getVal(r.remarks)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Schedule Date</strong><span class="text-xs font-mono font-bold text-slate-800">${getVal(r.scheduleDate)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Inspection Completed On</strong><span class="text-xs font-mono font-bold text-slate-800">${getVal(r.inspectionCompletedOn)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Conducted By</strong><span class="text-xs font-bold text-blue-700">${getVal(r.conductedBy)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Date(s) of Inspection</strong><span class="text-xs font-mono font-bold text-slate-800">${getVal(r.dateFrom)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Date(s) of NABL Witness</strong><span class="text-xs font-mono font-bold text-slate-800">${getVal(r.dateTo)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Man Days</strong><span class="text-xs font-mono font-bold text-slate-800">${getVal(r.manDays)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Seal Type & Count</strong><span class="text-xs font-bold text-slate-800">${getVal(r.sealType)} (${getVal(r.sealNoCount)})</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border sm:col-span-2"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Seal Serial Nos</strong><span class="text-xs font-mono font-bold text-slate-800 whitespace-pre-wrap">${getVal(r.sealSerial)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">NABL Status & Date</strong><span class="text-xs font-bold text-indigo-700">${getVal(r.nablStatusDate)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Status / Sub-Status</strong><span class="text-xs font-bold text-emerald-700">${getVal(r.status)} / ${getVal(r.subStatus)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Report OM / Date</strong><span class="text-xs font-bold text-slate-800">${getVal(r.reportOm)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Report Received / Mail</strong><span class="text-xs font-bold text-slate-800">${getVal(r.reportReceived)} / ${getVal(r.reportMail)}</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Letter Revision</strong><span class="text-xs font-bold text-slate-800">${getVal(r.letterRevision)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Month</strong><span class="text-xs font-bold text-slate-800">${getVal(r.month)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Billing Status</strong><span class="text-xs font-bold text-slate-800">${getVal(r.billingStatus)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-xl border"><strong class="text-slate-400 block text-[9px] uppercase mb-1">Invoice No</strong><span class="text-xs font-bold text-slate-800">${getVal(r.invoiceNo)}</span></div>
+                </div>
+            </div>
+        `;
+        modal.classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    window.closeMgrDetailsModal = function() {
+        document.getElementById("mgr-details-modal").classList.add("hidden");
+    };
+
+    window.openMgrActionModal = function(encodedPayload) {
+        const r = JSON.parse(decodeURIComponent(encodedPayload));
+        document.getElementById("mgr-target-insp-id").value = r.inspectionId;
+        document.getElementById("mgr-target-discom").value = r.discom;
+        document.getElementById("mgr-modal-subid").innerText = `ID: ${r.inspectionId} (${r.discom})`;
+
+        const inspSafe = (r.tpiaInspector && r.tpiaInspector.trim() !== "" && r.tpiaInspector !== "-") ? r.tpiaInspector : "NA";
+        const schedSafe = (r.scheduleDate && r.scheduleDate.trim() !== "" && r.scheduleDate !== "-") ? r.scheduleDate : "NA";
+
+        document.getElementById("mgr-last-insp").innerText = inspSafe;
+        document.getElementById("mgr-last-sched").innerText = schedSafe;
+
+        document.getElementById("mgr-input-inspector").value = r.tpiaInspector && r.tpiaInspector !== "-" ? r.tpiaInspector : "";
+        
+        let rawSched = r.scheduleDate || "";
+        if (rawSched && rawSched !== "NA") {
+            let cleanDate = rawSched.split('T')[0];
+            if (cleanDate.includes('/')) {
+                const p = cleanDate.split('/');
+                if (p.length === 3) cleanDate = `${p[2]}-${p[1]}-${p[0]}`;
+            }
+            document.getElementById("mgr-input-schedule-date").value = cleanDate;
+        } else {
+            document.getElementById("mgr-input-schedule-date").value = "";
+        }
+
+        document.getElementById("mgr-action-modal").classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    window.closeMgrActionModal = function() {
+        document.getElementById("mgr-action-modal").classList.add("hidden");
+    };
+
+    window.promptMgrConfirmation = function() {
+        const insp = document.getElementById("mgr-input-inspector").value;
+        const sched = document.getElementById("mgr-input-schedule-date").value;
+        const inspId = document.getElementById("mgr-target-insp-id").value;
+
+        if (!insp && !sched) {
+            alert("Please select an inspector to appoint or provide a schedule date.");
+            return;
+        }
+
+        const summaryBox = document.getElementById("mgr-confirm-summary");
+        summaryBox.innerHTML = `
+            <div class="flex justify-between"><span class="text-slate-500">Inspection ID:</span><strong class="font-mono text-blue-700">${inspId}</strong></div>
+            <div class="flex justify-between"><span class="text-slate-500">New Inspector (Col T):</span><strong class="text-slate-800">${insp || 'NA'}</strong></div>
+            <div class="flex justify-between"><span class="text-slate-500">New Schedule Date:</span><strong class="text-slate-800 font-mono">${sched || 'NA'}</strong></div>
+        `;
+
+        document.getElementById("mgr-action-modal").classList.add("hidden");
+        document.getElementById("mgr-confirm-modal").classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+    };
+
+    window.closeMgrConfirmModal = function() {
+        document.getElementById("mgr-confirm-modal").classList.add("hidden");
+        document.getElementById("mgr-action-modal").classList.add("hidden");
+    };
+
+    window.executeMgrSave = async function() {
+        const btn = document.getElementById("mgr-final-save-btn");
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...`;
+        btn.disabled = true;
+
+        try {
+            const inspectionId = document.getElementById("mgr-target-insp-id").value;
+            const discom = document.getElementById("mgr-target-discom").value;
+            const newInspector = document.getElementById("mgr-input-inspector").value;
+            const newScheduleDate = document.getElementById("mgr-input-schedule-date").value;
+
+            const now = new Date();
+            const pad = (n) => n.toString().padStart(2, '0');
+            const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+            const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+            let formattedSchedDate = (newScheduleDate && newScheduleDate !== "NA") ? newScheduleDate : "NA";
+            if (newScheduleDate && newScheduleDate.includes('-')) {
+                const p = newScheduleDate.split('-');
+                if (p.length === 3) {
+                    formattedSchedDate = `${p[2]}/${p[1]}/${p[0]}`;
+                }
+            }
+
+            const appointedName = (newInspector && newInspector.trim() !== "") ? newInspector : "NA";
+            const exactLogString = `**MANAGER UPDATE** Appointed: ${appointedName}, Sched Date: ${formattedSchedDate}, Manager: AyclHard76, ${dateStr} , ${timeStr}`;
+
+            const payload = {
+                action: "updateInspection",
+                client: "AYCL",
+                inspectorName: "AyclHard76 (Manager)",
+                inspectionId: inspectionId,
+                discom: discom,
+                tpiaInspector: appointedName !== "NA" ? appointedName : "Not Appointed",
+                logDetails: exactLogString,
+                logdetails: exactLogString
+            };
+
+            if (newScheduleDate) {
+                payload.scheduleDate = newScheduleDate;
+                payload.status = "Schedule";
+            }
+
+            const logPayload = {
+                action: "saveLogDetails",
+                client: "AYCL",
+                inspectionId: inspectionId,
+                logDetails: exactLogString
+            };
+
+            const [resUpdate, resLog] = await Promise.all([
+                fetch(API_URL, { method: "POST", body: JSON.stringify(payload) }),
+                fetch(API_URL, { method: "POST", body: JSON.stringify(logPayload) })
+            ]);
+
+            const textResponse = await resUpdate.text();
+            let data;
+            try {
+                data = JSON.parse(textResponse);
+            } catch (jsonErr) {
+                throw new Error("Server returned an invalid response. Check backend deployment permissions.");
+            }
+
+            if (data.status) {
+                window.closeMgrConfirmModal();
+                window.closeMgrActionModal();
+                window.closeMgrDetailsModal();
+                
+                window.showMgrToast("Inspection updated and synced successfully!");
+
+                await window.initAyclManagerModule();
+            } else {
+                alert("Save Error: " + (data.message || "Unknown error"));
+            }
+        } catch (err) {
+            console.error("Save execution error:", err);
+            alert("Save failed: " + err.message);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            if (window.lucide) window.lucide.createIcons();
+        }
+    };
+
+    setTimeout(() => {
+        window.initAyclManagerModule();
+    }, 50);
+</script>
